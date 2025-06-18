@@ -83,6 +83,14 @@ selected_year_range = st.sidebar.slider(
     key="year_range",
 )
 
+# If nothing selected in any multiselect, treat it as 'select all'
+if len(selected_industries) == 0:
+    selected_industries = industries
+if len(selected_countries) == 0:
+    selected_countries = countries
+if len(selected_companies) == 0:
+    selected_companies = companies
+
 # Apply filters
 mask = (
     df["Industry"].isin(selected_industries)

@@ -1,6 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import streamlit.components.v1 as components
+import networkx as nx
+from pyvis.network import Network
+import os
+import tempfile
 
 st.set_page_config(page_title="Unicorn Analytics Dashboard", layout="wide")
 
@@ -11,6 +16,7 @@ def load_data(url: str) -> pd.DataFrame:
     """Load unicorn dataset from remote CSV."""
     df = pd.read_csv(url, parse_dates=["Date Joined"])
     df["Valuation ($B)"] = df["Valuation"] / 1e9
+    df["Funding ($B)"] = pd.to_numeric(df["Funding"], errors="coerce") / 1e9
     df.dropna(subset=["Valuation"], inplace=True)
     return df
 
@@ -94,6 +100,58 @@ fig_industry = px.bar(industry_counts, x="Industry", y="Unicorn Count", text="Un
 fig_industry.update_layout(height=400)
 st.plotly_chart(fig_industry, use_container_width=True)
 
+# Funding vs. Valuation scatterplot
+st.subheader("Funding vs. Valuation (per Unicorn)")
+scatter_df = (
+    filtered_df.drop_duplicates("Company")
+    .dropna(subset=["Funding ($B)"])
+)
+fig_scatter = px.scatter(
+    scatter_df,
+    x="Funding ($B)",
+    y="Valuation ($B)",
+    color="Industry",
+    hover_data=["Company", "Country"],
+    labels={"Funding ($B)": "Funding ($B)", "Valuation ($B)": "Valuation ($B)"},
+)
+fig_scatter.update_traces(marker=dict(size=10, opacity=0.8, line=dict(width=0.5, color="DarkSlateGrey")))
+fig_scatter.update_layout(height=500)
+st.plotly_chart(fig_scatter, use_container_width=True)
+
 st.markdown("---")
+
+# Investor – Company Network (interactive)
+with st.expander("Investor – Company Network (Interactive)"):
+    top_n_investors = st.slider("Max investors to display", min_value=10, max_value=100, value=30, step=5)
+    # Build network
+    net = Network(height="600px", width="100%", bgcolor="#ffffff", font_color="black")
+    net.barnes_hut()
+
+    inv_counts = (
+        filtered_df[["Company", "Select Investors"]]
+        .drop_duplicates()
+        .groupby("Select Investors")["Company"].nunique()
+        .sort_values(ascending=False)
+    )
+    top_investors = inv_counts.head(top_n_investors).index.tolist()
+
+    sub_df = filtered_df[filtered_df["Select Investors"].isin(top_investors)].drop_duplicates(["Company", "Select Investors"])
+
+    # Add nodes
+    for company in sub_df["Company"].unique():
+        net.add_node(company, label=company, color="#ff7f0e", shape="dot", size=15)
+    for investor in top_investors:
+        net.add_node(investor, label=investor, color="#1f77b4", shape="square", size=20)
+
+    # Add edges
+    for _, row in sub_df.iterrows():
+        net.add_edge(row["Select Investors"], row["Company"])
+
+    # Generate and embed HTML
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
+        net.show(tmp_file.name)
+        html_content = open(tmp_file.name, "r", encoding="utf-8").read()
+    components.html(html_content, height=650, scrolling=True)
+    os.unlink(tmp_file.name)
 
 st.caption("Data source: Maven Unicorn Challenge (March 2022)") 

@@ -7,6 +7,7 @@ from pyvis.network import Network
 import os
 import tempfile
 import itertools
+import base64
 
 st.set_page_config(page_title="Unicorn Analytics Dashboard", layout="wide")
 
@@ -15,6 +16,11 @@ DATA_URL = "https://raw.githubusercontent.com/katiehuangx/Maven-Unicorn-Challeng
 def format_billions(value: float) -> str:
     """Return value formatted in billions with commas."""
     return f"{value:,.1f}B"
+
+def download_link(df: pd.DataFrame, filename: str = "filtered_unicorns.csv") -> str:
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    return f'<a href="data:file/csv;base64,{b64}" download="{filename}">📥 Download filtered data</a>'
 
 @st.cache_data(show_spinner=False)
 def load_data(url: str) -> pd.DataFrame:
@@ -89,6 +95,10 @@ with col4:
     avg_valuation = filtered_df.drop_duplicates("Company")["Valuation ($B)"].mean()
     st.metric("Avg. Valuation / Unicorn", format_billions(avg_valuation))
 
+st.markdown(download_link(filtered_df.drop_duplicates("Company")[[
+    "Company", "Valuation ($B)", "Funding ($B)", "Industry", "Country", "Year Founded"
+]]), unsafe_allow_html=True)
+
 st.markdown("---")
 
 # Valuation Accumulation Over Time
@@ -100,7 +110,24 @@ val_by_year = (
     .reset_index()
 )
 if val_by_year.empty:
-    st.info("No data available for the selected filters.")
+    st.warning("No data for current filters – showing global trend instead.")
+    val_by_year = (
+        df.drop_duplicates("Company")
+        .assign(Year=lambda d: d["Date Joined"].dt.year)
+        .groupby("Year")["Valuation ($B)"].sum()
+        .reset_index()
+    )
+    fig_year = px.line(
+        val_by_year,
+        x="Year",
+        y="Valuation ($B)",
+        markers=True,
+        labels={"Valuation ($B)": "Total Valuation ($B)"},
+    )
+    fig_year.update_traces(line_color="#636EFA")
+    fig_year.update_layout(height=400, xaxis_title="Year Became Unicorn", yaxis_title="Total Valuation ($B)")
+    st.plotly_chart(fig_year, use_container_width=True)
+    st.caption(f"Showing {len(val_by_year)} years")
 else:
     fig_year = px.line(
         val_by_year,
@@ -141,7 +168,20 @@ scatter_df = (
     .dropna(subset=["Funding ($B)"])
 )
 if scatter_df.empty:
-    st.info("No funding data available for the selected filters.")
+    st.warning("No data for current filters – showing all companies instead.")
+    scatter_df = df.drop_duplicates("Company").dropna(subset=["Funding ($B)"])
+    fig_scatter = px.scatter(
+        scatter_df,
+        x="Funding ($B)",
+        y="Valuation ($B)",
+        color="Industry",
+        hover_data=["Company", "Country"],
+        labels={"Funding ($B)": "Funding ($B)", "Valuation ($B)": "Valuation ($B)"},
+    )
+    fig_scatter.update_traces(marker=dict(size=10, opacity=0.8, line=dict(width=0.5, color="DarkSlateGrey")))
+    fig_scatter.update_layout(height=500)
+    st.plotly_chart(fig_scatter, use_container_width=True)
+    st.caption(f"{len(scatter_df)} companies plotted")
 else:
     fig_scatter = px.scatter(
         scatter_df,
@@ -190,4 +230,7 @@ with st.expander("Investor – Company Network (Interactive)"):
     except Exception as e:
         st.error(f"Unable to render investor network: {e}")
 
-st.caption("Data source: Maven Unicorn Challenge (March 2022)") 
+st.caption("Data source: Maven Unicorn Challenge (March 2022)")
+
+with st.expander("View data (first 100 rows)"):
+    st.dataframe(filtered_df.head(100)) 

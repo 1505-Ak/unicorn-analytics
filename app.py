@@ -42,6 +42,7 @@ st.sidebar.header("Filters")
 
 industries = sorted(df["Industry"].unique())
 countries = sorted(df["Country"].unique())
+companies = sorted(df["Company"].drop_duplicates())
 years = df["Year Founded"].sort_values().unique()
 min_year, max_year = int(years.min()), int(years.max())
 
@@ -50,6 +51,7 @@ st.sidebar.markdown("### Controls")
 if st.sidebar.button("🔄 Reset filters"):
     st.session_state["industry_filter"] = industries
     st.session_state["country_filter"] = countries
+    st.session_state["company_filter"] = companies
     st.session_state["year_range"] = (min_year, max_year)
 
 selected_industries = st.sidebar.multiselect(
@@ -66,6 +68,13 @@ selected_countries = st.sidebar.multiselect(
     key="country_filter",
 )
 
+selected_companies = st.sidebar.multiselect(
+    "Company (optional)",
+    companies,
+    default=st.session_state.get("company_filter", companies),
+    key="company_filter",
+)
+
 selected_year_range = st.sidebar.slider(
     "Year Founded Range",
     min_value=min_year,
@@ -79,13 +88,14 @@ mask = (
     df["Industry"].isin(selected_industries)
     & df["Country"].isin(selected_countries)
     & df["Year Founded"].between(*selected_year_range)
+    & df["Company"].isin(selected_companies)
 )
 filtered_df = df[mask]
 
 # KPIs
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Total Unicorns", f"{filtered_df['Company'].nunique():,}")
+    st.metric("Total Unicorns", f"{filtered_df['Company'].drop_duplicates().nunique():,}")
 with col2:
     total_valuation = filtered_df.drop_duplicates("Company")["Valuation ($B)"].sum()
     st.metric("Total Valuation", format_billions(total_valuation))

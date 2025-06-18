@@ -79,14 +79,15 @@ val_by_year = (
 if val_by_year.empty:
     st.info("No data available for the selected filters.")
 else:
-    fig_year = px.area(
+    fig_year = px.line(
         val_by_year,
         x="Year",
         y="Valuation ($B)",
+        markers=True,
         labels={"Valuation ($B)": "Total Valuation ($B)"},
-        color_discrete_sequence=["#636EFA"],
     )
-    fig_year.update_layout(height=400, xaxis_title="Year Became Unicorn")
+    fig_year.update_traces(line_color="#636EFA")
+    fig_year.update_layout(height=400, xaxis_title="Year Became Unicorn", yaxis_title="Total Valuation ($B)")
     st.plotly_chart(fig_year, use_container_width=True)
 
 # Top Countries by Number of Unicorns
@@ -115,17 +116,20 @@ scatter_df = (
     filtered_df.drop_duplicates("Company")
     .dropna(subset=["Funding ($B)"])
 )
-fig_scatter = px.scatter(
-    scatter_df,
-    x="Funding ($B)",
-    y="Valuation ($B)",
-    color="Industry",
-    hover_data=["Company", "Country"],
-    labels={"Funding ($B)": "Funding ($B)", "Valuation ($B)": "Valuation ($B)"},
-)
-fig_scatter.update_traces(marker=dict(size=10, opacity=0.8, line=dict(width=0.5, color="DarkSlateGrey")))
-fig_scatter.update_layout(height=500)
-st.plotly_chart(fig_scatter, use_container_width=True)
+if scatter_df.empty:
+    st.info("No funding data available for the selected filters.")
+else:
+    fig_scatter = px.scatter(
+        scatter_df,
+        x="Funding ($B)",
+        y="Valuation ($B)",
+        color="Industry",
+        hover_data=["Company", "Country"],
+        labels={"Funding ($B)": "Funding ($B)", "Valuation ($B)": "Valuation ($B)"},
+    )
+    fig_scatter.update_traces(marker=dict(size=10, opacity=0.8, line=dict(width=0.5, color="DarkSlateGrey")))
+    fig_scatter.update_layout(height=500)
+    st.plotly_chart(fig_scatter, use_container_width=True)
 
 st.markdown("---")
 

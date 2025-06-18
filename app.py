@@ -34,15 +34,38 @@ st.title("🦄 Global Unicorn Companies — Analytics")
 # Sidebar filters
 st.sidebar.header("Filters")
 
+# Sidebar: optional reset button
+st.sidebar.markdown("### Controls")
+if st.sidebar.button("🔄 Reset filters"):
+    st.session_state["industry_filter"] = industries
+    st.session_state["country_filter"] = countries
+    st.session_state["year_range"] = (min_year, max_year)
+
 industries = sorted(df["Industry"].unique())
-selected_industries = st.sidebar.multiselect("Industry", industries, default=industries)
+selected_industries = st.sidebar.multiselect(
+    "Industry",
+    industries,
+    default=st.session_state.get("industry_filter", industries),
+    key="industry_filter",
+)
 
 countries = sorted(df["Country"].unique())
-selected_countries = st.sidebar.multiselect("Country", countries, default=countries)
+selected_countries = st.sidebar.multiselect(
+    "Country",
+    countries,
+    default=st.session_state.get("country_filter", countries),
+    key="country_filter",
+)
 
 years = df["Year Founded"].sort_values().unique()
 min_year, max_year = int(years.min()), int(years.max())
-selected_year_range = st.sidebar.slider("Year Founded Range", min_value=min_year, max_value=max_year, value=(min_year, max_year))
+selected_year_range = st.sidebar.slider(
+    "Year Founded Range",
+    min_value=min_year,
+    max_value=max_year,
+    value=st.session_state.get("year_range", (min_year, max_year)),
+    key="year_range",
+)
 
 # Apply filters
 mask = (
@@ -89,6 +112,7 @@ else:
     fig_year.update_traces(line_color="#636EFA")
     fig_year.update_layout(height=400, xaxis_title="Year Became Unicorn", yaxis_title="Total Valuation ($B)")
     st.plotly_chart(fig_year, use_container_width=True)
+    st.caption(f"Showing {len(val_by_year)} years")
 
 # Top Countries by Number of Unicorns
 st.subheader("Top Countries by Number of Unicorns")
@@ -130,6 +154,7 @@ else:
     fig_scatter.update_traces(marker=dict(size=10, opacity=0.8, line=dict(width=0.5, color="DarkSlateGrey")))
     fig_scatter.update_layout(height=500)
     st.plotly_chart(fig_scatter, use_container_width=True)
+    st.caption(f"{len(scatter_df)} companies plotted")
 
 st.markdown("---")
 

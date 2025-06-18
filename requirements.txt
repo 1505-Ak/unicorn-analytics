@@ -2,4 +2,4 @@ pandas
 streamlit>=1.25.0
 plotly>=5.0.0
 networkx
-pyvis 
+pyvis==0.3.2 

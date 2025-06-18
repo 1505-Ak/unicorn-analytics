@@ -6,10 +6,15 @@ import networkx as nx
 from pyvis.network import Network
 import os
 import tempfile
+import itertools
 
 st.set_page_config(page_title="Unicorn Analytics Dashboard", layout="wide")
 
 DATA_URL = "https://raw.githubusercontent.com/katiehuangx/Maven-Unicorn-Challenge/main/unicorn_companies_clean.csv"
+
+def format_billions(value: float) -> str:
+    """Return value formatted in billions with commas."""
+    return f"{value:,.1f}B"
 
 @st.cache_data(show_spinner=False)
 def load_data(url: str) -> pd.DataFrame:
@@ -53,32 +58,36 @@ with col1:
     st.metric("Total Unicorns", f"{filtered_df['Company'].nunique():,}")
 with col2:
     total_valuation = filtered_df.drop_duplicates("Company")["Valuation ($B)"].sum()
-    st.metric("Total Valuation ($B)", f"{total_valuation:,.1f}")
+    st.metric("Total Valuation", format_billions(total_valuation))
 with col3:
     avg_year = filtered_df["Year Founded"].mean()
     st.metric("Avg. Year Founded", f"{avg_year:.0f}")
 with col4:
     avg_valuation = filtered_df.drop_duplicates("Company")["Valuation ($B)"].mean()
-    st.metric("Avg. Valuation per Unicorn ($B)", f"{avg_valuation:,.2f}")
+    st.metric("Avg. Valuation / Unicorn", format_billions(avg_valuation))
 
 st.markdown("---")
 
-# Valuations over time
-st.subheader("Valuations Over Time")
+# Valuation Accumulation Over Time
+st.subheader("Valuation Accumulation Over Time")
 val_by_year = (
     filtered_df.drop_duplicates("Company")
-    .groupby(filtered_df["Date Joined"].dt.year)["Valuation ($B)"].sum()
-    .reset_index(name="Total Valuation ($B)")
+    .assign(Year=lambda d: d["Date Joined"].dt.year)
+    .groupby("Year")["Valuation ($B)"].sum()
+    .reset_index()
 )
-fig_year = px.line(
-    val_by_year,
-    x="Date Joined",
-    y="Total Valuation ($B)",
-    markers=True,
-    labels={"Date Joined": "Year Became Unicorn"},
-)
-fig_year.update_layout(height=400)
-st.plotly_chart(fig_year, use_container_width=True)
+if val_by_year.empty:
+    st.info("No data available for the selected filters.")
+else:
+    fig_year = px.area(
+        val_by_year,
+        x="Year",
+        y="Valuation ($B)",
+        labels={"Valuation ($B)": "Total Valuation ($B)"},
+        color_discrete_sequence=["#636EFA"],
+    )
+    fig_year.update_layout(height=400, xaxis_title="Year Became Unicorn")
+    st.plotly_chart(fig_year, use_container_width=True)
 
 # Top Countries by Number of Unicorns
 st.subheader("Top Countries by Number of Unicorns")
@@ -123,35 +132,33 @@ st.markdown("---")
 # Investor – Company Network (interactive)
 with st.expander("Investor – Company Network (Interactive)"):
     top_n_investors = st.slider("Max investors to display", min_value=10, max_value=100, value=30, step=5)
-    # Build network
-    net = Network(height="600px", width="100%", bgcolor="#ffffff", font_color="black")
-    net.barnes_hut()
+    try:
+        net = Network(height="600px", width="100%", bgcolor="#ffffff", font_color="black", directed=False)
+        net.barnes_hut()
 
-    inv_counts = (
-        filtered_df[["Company", "Select Investors"]]
-        .drop_duplicates()
-        .groupby("Select Investors")["Company"].nunique()
-        .sort_values(ascending=False)
-    )
-    top_investors = inv_counts.head(top_n_investors).index.tolist()
+        inv_counts = (
+            filtered_df[["Company", "Select Investors"]]
+            .drop_duplicates()
+            .groupby("Select Investors")["Company"].nunique()
+            .sort_values(ascending=False)
+        )
+        top_investors = inv_counts.head(top_n_investors).index.tolist()
+        sub_df = filtered_df[filtered_df["Select Investors"].isin(top_investors)].drop_duplicates(["Company", "Select Investors"])
 
-    sub_df = filtered_df[filtered_df["Select Investors"].isin(top_investors)].drop_duplicates(["Company", "Select Investors"])
+        # Add nodes and edges
+        for investor in top_investors:
+            net.add_node(investor, label=investor, color="#1f77b4", shape="square", size=20)
+        for company in sub_df["Company"].unique():
+            net.add_node(company, label=company, color="#ff7f0e", shape="dot", size=12)
+        for _, row in sub_df.iterrows():
+            net.add_edge(row["Select Investors"], row["Company"])
 
-    # Add nodes
-    for company in sub_df["Company"].unique():
-        net.add_node(company, label=company, color="#ff7f0e", shape="dot", size=15)
-    for investor in top_investors:
-        net.add_node(investor, label=investor, color="#1f77b4", shape="square", size=20)
-
-    # Add edges
-    for _, row in sub_df.iterrows():
-        net.add_edge(row["Select Investors"], row["Company"])
-
-    # Generate and embed HTML
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
-        net.show(tmp_file.name)
-        html_content = open(tmp_file.name, "r", encoding="utf-8").read()
-    components.html(html_content, height=650, scrolling=True)
-    os.unlink(tmp_file.name)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
+            net.write_html(tmp_file.name, notebook=False, open_browser=False)
+            html_content = open(tmp_file.name, "r", encoding="utf-8").read()
+        components.html(html_content, height=650, scrolling=True)
+        os.unlink(tmp_file.name)
+    except Exception as e:
+        st.error(f"Unable to render investor network: {e}")
 
 st.caption("Data source: Maven Unicorn Challenge (March 2022)") 

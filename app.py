@@ -40,6 +40,11 @@ st.title("🦄 Global Unicorn Companies — Analytics")
 # Sidebar filters
 st.sidebar.header("Filters")
 
+industries = sorted(df["Industry"].unique())
+countries = sorted(df["Country"].unique())
+years = df["Year Founded"].sort_values().unique()
+min_year, max_year = int(years.min()), int(years.max())
+
 # Sidebar: optional reset button
 st.sidebar.markdown("### Controls")
 if st.sidebar.button("🔄 Reset filters"):
@@ -47,7 +52,6 @@ if st.sidebar.button("🔄 Reset filters"):
     st.session_state["country_filter"] = countries
     st.session_state["year_range"] = (min_year, max_year)
 
-industries = sorted(df["Industry"].unique())
 selected_industries = st.sidebar.multiselect(
     "Industry",
     industries,
@@ -55,7 +59,6 @@ selected_industries = st.sidebar.multiselect(
     key="industry_filter",
 )
 
-countries = sorted(df["Country"].unique())
 selected_countries = st.sidebar.multiselect(
     "Country",
     countries,
@@ -63,8 +66,6 @@ selected_countries = st.sidebar.multiselect(
     key="country_filter",
 )
 
-years = df["Year Founded"].sort_values().unique()
-min_year, max_year = int(years.min()), int(years.max())
 selected_year_range = st.sidebar.slider(
     "Year Founded Range",
     min_value=min_year,
